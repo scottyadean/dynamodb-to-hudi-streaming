@@ -1,12 +1,12 @@
 # Serverless Steaming Data
 
-Example of using Servless Framework to Stream data from dynamodb to a Hudi table.
+Example of using Servless Framework to deploy resources to stream data from dynamodb to a Hudi table.
 
 ### Project Overview
 
 Sample sls streaming service pipeline
 
-[Read More Info Here:](https://aws.amazon.com/blogs/big-data/build-a-serverless-pipeline-to-analyze-streaming-data-using-aws-glue-apache-hudi-and-amazon-s3/)
+[Read More Info From the AWS Blog Here:](https://aws.amazon.com/blogs/big-data/build-a-serverless-pipeline-to-analyze-streaming-data-using-aws-glue-apache-hudi-and-amazon-s3/)
 
 [soumilshah1995 hudi expert I got this template from](https://github.com/soumilshah1995/getting-started-with-pyspark-and-apache-hudi-glue-)
 

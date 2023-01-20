@@ -7,9 +7,9 @@ deploy_bucket: application-artifacts-${self:custom.args.env}
 policy_version: "2012-10-17"
 
 # Billing Tags
-billing_product: pps
+billing_product: non-billing
 billing_env: ${self:custom.args.deploy}
-billing_type: app
+billing_type: experimental-app
 
 # Env Vars
 env_vars:
