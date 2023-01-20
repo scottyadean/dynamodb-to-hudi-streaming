@@ -2,7 +2,7 @@
 ## Build a serverless pipeline to analyze streaming data
 ## https://aws.amazon.com/blogs/big-data/build-a-serverless-pipeline-to-analyze-streaming-data-using-aws-glue-apache-hudi-and-amazon-s3/
 
-service: media-stream-to-hudi-table
+service: dynamodb-to-hudi-streaming
 frameworkVersion: '3'
 custom:
   stage: ${opt:stage, 'development'}
