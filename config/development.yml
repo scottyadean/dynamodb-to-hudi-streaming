@@ -2,8 +2,8 @@
 env: development
 deploy: dev
 region: us-west-2
-aws_account_id: 758725036624
-deploy_bucket: clear-lake-artifacts-${self:custom.args.env}
+aws_account_id: xxxxxxxxxxxx
+deploy_bucket: application-artifacts-${self:custom.args.env}
 policy_version: "2012-10-17"
 
 # Billing Tags
@@ -30,7 +30,7 @@ env_vars:
   #  Glue
   GLUE_DB_NAME: ${self:custom.args.env}_example_stream
   GLUE_KINESIS_TABLE: tbl_dynamodb_kinesis
-  GLUE_BUCKET_DEPLOY: ${self:custom.args.env}-clear-lake-stream
+  GLUE_BUCKET_DEPLOY: ${self:custom.args.env}-data-streams
   GLUE_JOB_NAME: ${self:custom.args.env}-glue-to-hudi-stream
   GLUE_SCRIPT_NAME: glue_script.py
   GLUE_ROLE: arn:aws:iam::${self:custom.args.aws_account_id}:role/${self:custom.args.env}-stream-to-hudi-table-role
