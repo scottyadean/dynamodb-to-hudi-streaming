@@ -1,0 +1,42 @@
+# App Base Env
+env: development
+deploy: dev
+region: us-west-2
+aws_account_id: 758725036624
+deploy_bucket: clear-lake-artifacts-${self:custom.args.env}
+policy_version: "2012-10-17"
+
+# Billing Tags
+billing_product: pps
+billing_env: ${self:custom.args.deploy}
+billing_type: app
+
+# Env Vars
+env_vars:
+  # Base Vars
+  ENV: ${self:custom.args.env}
+  ACC: ${self:custom.args.aws_account_id}
+  REGION: ${self:custom.args.region}
+  
+  # Dynamodb
+  DYNAMO_DB_TABLE_NAME: development-streaming-media-table
+
+  # Kinesis
+  STREAM_TO_HUDI: ${self:custom.args.env}-media-hudi-stream
+  RETENTION_PERIOD_HOURS_HUDI: 24
+  STREAM_FROM_DYNAMO: ${self:custom.args.env}-media-dynamodb-stream
+  RETENTION_PERIOD_HOURS_DYNAMODB: 24
+
+  #  Glue
+  GLUE_DB_NAME: ${self:custom.args.env}_example_stream
+  GLUE_KINESIS_TABLE: tbl_dynamodb_kinesis
+  GLUE_BUCKET_DEPLOY: ${self:custom.args.env}-clear-lake-stream
+  GLUE_JOB_NAME: ${self:custom.args.env}-glue-to-hudi-stream
+  GLUE_SCRIPT_NAME: glue_script.py
+  GLUE_ROLE: arn:aws:iam::${self:custom.args.aws_account_id}:role/${self:custom.args.env}-stream-to-hudi-table-role
+  GLUE_HUDI_CONNECTOR_NAME: ${self:custom.args.env}-media-hudi-connection
+  HUDI_TABLE_NAME: tbl_hudi_streams
+  HUDI_DATALAKE_PATH: s3://${self:custom.args.env_vars.GLUE_BUCKET_DEPLOY}/hudi/${self:custom.args.env_vars.HUDI_TABLE_NAME}/
+  GLUE_STREAM_CHECK_POINT: s3://${self:custom.args.env_vars.GLUE_BUCKET_DEPLOY}/spark_checkpoints/
+  KINESIS_PROCESS_WINDOW: 10 seconds
+  GLUE_SCRIPT_BUCKET: ${self:custom.args.env_vars.GLUE_BUCKET_DEPLOY}

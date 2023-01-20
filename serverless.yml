@@ -1,0 +1,236 @@
+
+## Build a serverless pipeline to analyze streaming data
+## https://aws.amazon.com/blogs/big-data/build-a-serverless-pipeline-to-analyze-streaming-data-using-aws-glue-apache-hudi-and-amazon-s3/
+
+service: media-stream-to-hudi-table
+frameworkVersion: '3'
+custom:
+  stage: ${opt:stage, 'development'}
+  args: ${file(./config/${self:custom.stage}.yml)}
+
+provider:
+  name: aws
+  runtime: python3.8
+  memorySize: 512
+  timeout: 600
+  region: ${self:custom.args.region}
+  environment: ${self:custom.args.env_vars}
+  deploymentBucket:
+    name: ${self:custom.args.deploy_bucket}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - kinesis:PutRecord
+          Resource: "*"
+        - Effect: Allow
+          Action:
+            - glue:GetJobRun
+          Resource: "*"
+  tags:
+    team: clear_lake
+    billing-env: ${self:custom.args.billing_env}
+    billing-type: ${self:custom.args.billing_type}
+    billing-product: ${self:custom.args.billing_product}
+
+# https://www.npmjs.com/package/serverless-glue
+plugins:
+  - serverless-glue
+
+package:
+  patterns:
+    - 'utils/**'
+    - '!env/**'
+    - '!node_modules/**'
+    - '!tests/**'
+    - '!.vscode/**'
+    - '!.serverless/**'
+    - '!package-lock.json'
+
+Glue:
+  bucketDeploy: ${self:custom.args.env_vars.GLUE_BUCKET_DEPLOY}
+  tempDirBucket: ${self:custom.args.env_vars.GLUE_BUCKET_DEPLOY}
+  tempDirS3Prefix: 'temp/'
+  jobs:
+    - name: ${self:custom.args.env_vars.GLUE_JOB_NAME}
+      scriptPath: ${self:custom.args.env_vars.GLUE_SCRIPT_NAME}
+      type: spark
+      glueVersion: "python3-3.0"
+      role: ${self:custom.args.env_vars.GLUE_ROLE}
+      MaxConcurrentRuns: 3
+      Connections:
+        - ${self:custom.args.env_vars.GLUE_HUDI_CONNECTOR_NAME}
+      DefaultArguments:
+        customArguments:
+          class : 'GlueApp'
+          connector_name: ${self:custom.args.env_vars.GLUE_HUDI_CONNECTOR_NAME}
+          database_name: ${self:custom.args.env_vars.GLUE_DB_NAME}
+          hudi_table_name: ${self:custom.args.env_vars.HUDI_TABLE_NAME}
+          kinesis_table_name: ${self:custom.args.env_vars.GLUE_KINESIS_TABLE}
+          s3_path_hudi: ${self:custom.args.env_vars.HUDI_DATALAKE_PATH}
+          s3_path_spark: ${self:custom.args.env_vars.GLUE_STREAM_CHECK_POINT}
+          starting_position_of_kinesis_iterator: 'LATEST'
+          window_size : ${self:custom.args.env_vars.KINESIS_PROCESS_WINDOW}
+      tempDir: true
+      WorkerType: Standard # Might want to change this to G0.25X
+      NumberOfWorkers: 3
+      Timeout: 2880
+      MaxRetries: 0
+      SupportFiles:
+        - local_path: ${self:custom.args.env_vars.GLUE_SCRIPT_NAME}
+          s3_bucket: ${self:custom.args.env_vars.GLUE_SCRIPT_BUCKET}
+          s3_prefix: 'Scripts/'
+          execute_upload: True
+
+functions:
+  process_incoming_stream:
+    handler: handlers.stream_handler  
+    events:
+      - stream:
+          type: kinesis
+          arn:
+            Fn::GetAtt:
+              - KinesisDataStreamsDynamoDB
+              - Arn
+
+resources:
+  Resources:
+    KinesisDataStreamsDynamoDB:
+      Type: AWS::Kinesis::Stream
+      Properties:
+        Name: ${self:custom.args.env_vars.STREAM_FROM_DYNAMO}
+        RetentionPeriodHours: ${self:custom.args.env_vars.RETENTION_PERIOD_HOURS_DYNAMODB}
+        StreamModeDetails:
+          StreamMode: ON_DEMAND
+
+    KinesisDataStreamsHUDI:
+      Type: AWS::Kinesis::Stream
+      Properties:
+        Name: ${self:custom.args.env_vars.STREAM_TO_HUDI}
+        RetentionPeriodHours: ${self:custom.args.env_vars.RETENTION_PERIOD_HOURS_HUDI}
+        StreamModeDetails:
+          StreamMode: ON_DEMAND
+
+    DynamoDBTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.args.env_vars.DYNAMO_DB_TABLE_NAME}
+        AttributeDefinitions:
+          - AttributeName: pk
+            AttributeType: S
+          - AttributeName: sk
+            AttributeType: S
+        KeySchema:
+          - AttributeName: pk
+            KeyType: HASH
+          - AttributeName: sk
+            KeyType: RANGE
+        BillingMode: PAY_PER_REQUEST
+        TableClass: STANDARD
+        PointInTimeRecoverySpecification:
+          PointInTimeRecoveryEnabled: true
+        KinesisStreamSpecification:
+          StreamArn: !GetAtt KinesisDataStreamsDynamoDB.Arn
+
+    GlueDatabase:
+      Type: AWS::Glue::Database
+      Properties:
+        CatalogId: ${self:custom.args.env_vars.ACC}
+        DatabaseInput:
+          Name: ${self:custom.args.env_vars.GLUE_DB_NAME}
+
+    GlueJobsRole:
+      Type: AWS::IAM::Role
+      Properties: 
+        RoleName: ${self:custom.args.env}-stream-to-hudi-table-role
+        AssumeRolePolicyDocument:
+          Version: ${self:custom.args.policy_version}
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - glue.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
+          - arn:aws:iam::aws:policy/AWSGlueConsoleSageMakerNotebookFullAccess
+          - arn:aws:iam::aws:policy/AmazonAthenaFullAccess
+          - arn:aws:iam::aws:policy/service-role/AWSQuicksightAthenaAccess
+          - arn:aws:iam::aws:policy/AmazonEC2FullAccess
+          - arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole
+          - arn:aws:iam::aws:policy/AmazonS3FullAccess
+          - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
+          - arn:aws:iam::aws:policy/AmazonRedshiftDataFullAccess
+          - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess
+        Policies:
+          - PolicyName: glueJobsPolicy
+            PolicyDocument:
+              Version: ${self:custom.args.policy_version}
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:*
+                    - lambda:*
+                    - glue:*
+                    - eks:*
+                    - athena:*
+                    - kinesis:*
+                    - kinesisanalytics:*
+                    - states:SendTaskFailure
+                    - states:SendTaskSuccess
+                    - states:SendTaskHeartbeat
+                    - logs:DeleteSubscriptionFilter
+                    - logs:DeleteLogStream
+                    - logs:CreateExportTask
+                    - logs:CreateLogStream
+                    - logs:DeleteMetricFilter
+                    - logs:CancelExportTask
+                    - logs:DeleteRetentionPolicy
+                    - logs:DeleteLogDelivery
+                    - logs:AssociateKmsKey
+                    - logs:PutDestination
+                    - logs:DisassociateKmsKey
+                    - logs:DeleteLogGroup
+                    - logs:PutDestinationPolicy
+                    - logs:DeleteDestination
+                    - logs:DeleteQueryDefinition
+                    - logs:PutQueryDefinition
+                    - logs:CreateLogGroup
+                    - logs:PutLogEvents
+                    - logs:CreateLogDelivery
+                    - logs:PutMetricFilter
+                    - logs:UpdateLogDelivery
+                    - logs:PutSubscriptionFilter
+                    - logs:PutRetentionPolicy
+                  Resource:
+                    - "*"
+                - Effect: Allow
+                  Sid: "ClearLakeResourceBuckets"
+                  Action:
+                    - s3:*
+                  Resource:
+                    - "arn:aws:s3:::${self:custom.args.env}-clear-lake*"
+                - Effect: Allow
+                  Sid: "ClearLakeSecretsManager"
+                  Action:
+                    - secretsmanager:List*
+                    - secretsmanager:Get*
+                  Resource:
+                    - "arn:aws:secretsmanager:*:*:secret:${self:custom.args.env}/*"
+                - Effect: Allow
+                  Sid: "ClearElasticSearch"
+                  Action:
+                    - es:Describe*
+                    - es:List*
+                    - es:Http*
+                  Resource:
+                    - "arn:aws:secretsmanager:*:*:secret:${self:custom.args.env}/*"
+                - Effect: Allow
+                  Sid: "ClearLakeApiGtwayGettKeys"
+                  Action:
+                    - apigateway:GET
+                  Resource:
+                    - "arn:aws:apigateway:${self:custom.args.region}::/apikeys"
+                    - "arn:aws:apigateway:${self:custom.args.region}::/apikeys/*"
+
