@@ -19,12 +19,12 @@ env_vars:
   REGION: ${self:custom.args.region}
   
   # Dynamodb
-  DYNAMO_DB_TABLE_NAME: development-streaming-media-table
+  DYNAMO_DB_TABLE_NAME: development-streaming-table
 
   # Kinesis
-  STREAM_TO_HUDI: ${self:custom.args.env}-media-hudi-stream
+  STREAM_TO_HUDI: ${self:custom.args.env}-hudi-stream
   RETENTION_PERIOD_HOURS_HUDI: 24
-  STREAM_FROM_DYNAMO: ${self:custom.args.env}-media-dynamodb-stream
+  STREAM_FROM_DYNAMO: ${self:custom.args.env}-dynamodb-stream
   RETENTION_PERIOD_HOURS_DYNAMODB: 24
 
   #  Glue
@@ -34,7 +34,7 @@ env_vars:
   GLUE_JOB_NAME: ${self:custom.args.env}-glue-to-hudi-stream
   GLUE_SCRIPT_NAME: glue_script.py
   GLUE_ROLE: arn:aws:iam::${self:custom.args.aws_account_id}:role/${self:custom.args.env}-stream-to-hudi-table-role
-  GLUE_HUDI_CONNECTOR_NAME: ${self:custom.args.env}-media-hudi-connection
+  GLUE_HUDI_CONNECTOR_NAME: ${self:custom.args.env}-hudi-connection
   HUDI_TABLE_NAME: tbl_hudi_streams
   HUDI_DATALAKE_PATH: s3://${self:custom.args.env_vars.GLUE_BUCKET_DEPLOY}/hudi/${self:custom.args.env_vars.HUDI_TABLE_NAME}/
   GLUE_STREAM_CHECK_POINT: s3://${self:custom.args.env_vars.GLUE_BUCKET_DEPLOY}/spark_checkpoints/
