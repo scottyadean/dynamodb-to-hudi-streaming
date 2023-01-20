@@ -210,7 +210,7 @@ resources:
                   Action:
                     - s3:*
                   Resource:
-                    - "arn:aws:s3:::${self:custom.args.env}-clear-lake*"
+                    - "arn:aws:s3:::${self:custom.args.env}-*"
                 - Effect: Allow
                   Sid: "ClearLakeSecretsManager"
                   Action:
